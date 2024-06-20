@@ -23,20 +23,11 @@
 
 import Foundation
 
-actor TarHandle {
+struct TarHandle {
   let fileURL: URL
-  let fileHandle: FileHandle
 
-  init(fileURL: URL) throws {
-    guard let fileHandle = try? FileHandle(forReadingFrom: fileURL) else {
-      throw Archive.Error.failedToOpenArchive
-    }
+  init(fileURL: URL) {
     self.fileURL = fileURL
-    self.fileHandle = fileHandle
-  }
-
-  deinit {
-    try? fileHandle.close()
   }
 
   func contents() throws ->[TarContent] {
@@ -46,40 +37,51 @@ actor TarHandle {
     guard let fileSize = fileAttributes[.size] as? UInt64 else {
       throw Archive.Error.failedToReadArchive
     }
-
-    do {
-      let blockSize = TarBlock.size
-      var offset: UInt64 = .zero
-      var contents: [TarContent] = []
-      while offset < fileSize {
-        try fileHandle.seek(toOffset: offset)
-        guard let data = try fileHandle.read(count: blockSize) else {
-          throw Archive.Error.failedToReadArchive
-        }
-        if let content = TarContent(block: TarBlock(data: data), handle: self, offset: offset) {
-          if content.fileType != .paxHeader && content.fileType != .globalExtendedHeader {
-            contents.append(content)
+    return try _openFile { handle in
+      do {
+        let blockSize = TarBlock.size
+        var offset: UInt64 = .zero
+        var contents: [TarContent] = []
+        while offset < fileSize {
+          try handle.seek(toOffset: offset)
+          guard let data = try handle.read(count: blockSize) else {
+            throw Archive.Error.failedToReadArchive
           }
-          offset += content.blockSize
-        } else {
-          offset += UInt64(blockSize)
+          if let content = TarContent(block: TarBlock(data: data), handle: self, offset: offset) {
+            if content.fileType != .paxHeader && content.fileType != .globalExtendedHeader {
+              contents.append(content)
+            }
+            offset += content.blockSize
+          } else {
+            offset += UInt64(blockSize)
+          }
         }
+        return contents
+      } catch {
+        throw Archive.Error.failedToReadArchive
       }
-      return contents
-    } catch {
-      throw Archive.Error.failedToReadArchive
     }
   }
 
   func extract(offset: UInt64, upToCount count: Int) throws -> Data {
-    do {
-      try fileHandle.seek(toOffset: offset)
-      guard let data = try fileHandle.read(count: count) else {
+    return try _openFile { handle in
+      do {
+        try handle.seek(toOffset: offset)
+        guard let data = try handle.read(count: count) else {
+          throw Archive.Error.failedToExtractArchive
+        }
+        return data
+      } catch {
         throw Archive.Error.failedToExtractArchive
       }
-      return data
-    } catch {
-      throw Archive.Error.failedToExtractArchive
     }
+  }
+
+  private func _openFile<Result>(_ handler: (FileHandle) throws -> Result) throws -> Result {
+    let handle = try FileHandle(forReadingFrom: fileURL)
+    defer {
+      try? handle.close()
+    }
+    return try handler(handle)
   }
 }

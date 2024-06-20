@@ -30,21 +30,21 @@ final class TarReader: Archive.Reader {
     self.fileURL = fileURL
   }
 
-  func contents() async throws -> [Archive.Content] {
-    let handle = try TarHandle(fileURL: fileURL)
-    return try await handle.contents()
+  func contents() throws -> [Archive.Content] {
+    let handle = TarHandle(fileURL: fileURL)
+    return try handle.contents()
   }
 
-  func contents(password: String) async throws -> [Archive.Content] {
-    let handle = try TarHandle(fileURL: fileURL)
-    return try await handle.contents()
+  func contents(password: String) throws -> [Archive.Content] {
+    let handle = TarHandle(fileURL: fileURL)
+    return try handle.contents()
   }
 
-  func checkEncrypted() async throws -> Bool {
+  func checkEncrypted() throws -> Bool {
     return false
   }
 
-  func validatePassword(_ password: String) async throws -> Bool {
+  func validatePassword(_ password: String) throws -> Bool {
     return true
   }
 }

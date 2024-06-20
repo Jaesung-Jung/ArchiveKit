@@ -102,15 +102,15 @@ struct TarContent: Archive.Content {
     }
   }
 
-  func data() async throws -> Data {
-    return try await handle.extract(offset: dataOffset, upToCount: Int(size))
+  func data() throws -> Data {
+    return try handle.extract(offset: dataOffset, upToCount: Int(size))
   }
 
-  func data(upToCount count: Int) async throws -> Data {
-    return try await handle.extract(offset: dataOffset, upToCount: min(count, Int(dataBlockSize)))
+  func data(upToCount count: Int) throws -> Data {
+    return try handle.extract(offset: dataOffset, upToCount: min(count, Int(dataBlockSize)))
   }
 
-  func write(to url: URL) async throws {
+  func write(to url: URL) throws {
   }
 }
 

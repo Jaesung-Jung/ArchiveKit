@@ -105,7 +105,7 @@ extension Archive {
 // MARK: - Archive.ContentType
 
 extension Archive {
-  public enum ContentType {
+  public enum ContentType: Sendable {
     case directory
     case file
     case symbolicLink
@@ -116,16 +116,16 @@ extension Archive {
 // MARK: - Archive.Content
 
 extension Archive {
-  public protocol Content {
+  public protocol Content: Sendable {
     var name: String { get }
     var size: UInt64 { get }
     var isHidden: Bool { get }
     var contentType: ContentType { get }
     var format: Format { get }
 
-    func data() async throws -> Data
-    func data(upToCount: Int) async throws -> Data
-    func write(to url: URL) async throws
+    func data() throws -> Data
+    func data(upToCount: Int) throws -> Data
+    func write(to url: URL) throws
   }
 }
 

@@ -30,23 +30,23 @@ final class ZipReader: Archive.Reader {
     self.fileURL = fileURL
   }
 
-  func contents() async throws -> [Archive.Content] {
-    let handle = try ZipHandle(fileURL: fileURL, password: nil)
-    return try await handle.contents()
+  func contents() throws -> [Archive.Content] {
+    let handle = ZipHandle(fileURL: fileURL, password: nil)
+    return try handle.contents()
   }
 
-  func contents(password: String) async throws -> [Archive.Content] {
-    let handle = try ZipHandle(fileURL: fileURL, password: password)
-    return try await handle.contents()
+  func contents(password: String) throws -> [Archive.Content] {
+    let handle = ZipHandle(fileURL: fileURL, password: password)
+    return try handle.contents()
   }
 
-  func checkEncrypted() async throws -> Bool {
-    let handle = try ZipHandle(fileURL: fileURL, password: nil)
-    return await handle.checkEncrypted()
+  func checkEncrypted() throws -> Bool {
+    let handle = ZipHandle(fileURL: fileURL, password: nil)
+    return handle.checkEncrypted()
   }
 
-  func validatePassword(_ password: String) async throws -> Bool {
-    let handle = try ZipHandle(fileURL: fileURL, password: password)
-    return await handle.validatePassword(password)
+  func validatePassword(_ password: String) throws -> Bool {
+    let handle = ZipHandle(fileURL: fileURL, password: password)
+    return handle.validatePassword(password)
   }
 }

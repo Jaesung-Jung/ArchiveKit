@@ -24,104 +24,117 @@
 import Foundation
 import minizip407
 
-actor ZipHandle {
-  let fileHandle: unzFile
+struct ZipHandle {
+  let fileURL: URL
   let password: String?
 
-  init(fileURL: URL, password: String?) throws {
-    guard let fileHandle = unzOpen64(fileURL.filePath) else {
-      throw Archive.Error.failedToOpenArchive
-    }
-    self.fileHandle = fileHandle
+  init(fileURL: URL, password: String?) {
+    self.fileURL = fileURL
     self.password = password
   }
 
-  deinit {
-    unzClose(fileHandle)
-  }
-
   func contents() throws -> [ZipContent] {
-    guard unzGoToFirstFile(fileHandle) == UNZ_OK else {
-      throw Archive.Error.failedToReadArchive
-    }
-    var contents: [ZipContent] = []
-    repeat {
-      var info = unz_file_info64()
-      guard unzGetCurrentFileInfo64(fileHandle, &info, nil, 0, nil, 0, nil, 0) == UNZ_OK else {
+    return try _openArchive { handle in
+      guard unzGoToFirstFile(handle) == UNZ_OK else {
         throw Archive.Error.failedToReadArchive
       }
+      var contents: [ZipContent] = []
+      repeat {
+        var info = unz_file_info64()
+        guard unzGetCurrentFileInfo64(handle, &info, nil, 0, nil, 0, nil, 0) == UNZ_OK else {
+          throw Archive.Error.failedToReadArchive
+        }
 
-      var fileName = Array<CChar>(repeating: 0, count: Int(info.size_filename + 1))
-      unzGetCurrentFileInfo64(fileHandle, nil, &fileName, info.size_filename, nil, 0, nil, 0)
+        var fileName = Array<CChar>(repeating: 0, count: Int(info.size_filename + 1))
+        unzGetCurrentFileInfo64(handle, nil, &fileName, info.size_filename, nil, 0, nil, 0)
 
-      let name = String(cString: fileName)
-      let content = ZipContent(
-        handle: self,
-        offset: unzGetOffset64(fileHandle),
-        name: name,
-        isHidden: name.lastPathComponent.first == ".",
-        isDirectory: name.last == "/",
-        compressedSize: info.compressed_size,
-        uncompressedSize: info.uncompressed_size,
-        crc: info.crc
-      )
-      contents.append(content)
-    } while unzGoToNextFile(fileHandle) == UNZ_OK
+        let name = String(cString: fileName)
+        let content = ZipContent(
+          handle: self,
+          offset: unzGetOffset64(handle),
+          name: name,
+          isHidden: name.lastPathComponent.first == ".",
+          isDirectory: name.last == "/",
+          compressedSize: info.compressed_size,
+          uncompressedSize: info.uncompressed_size,
+          crc: info.crc
+        )
+        contents.append(content)
+      } while unzGoToNextFile(handle) == UNZ_OK
 
-    return contents
+      return contents
+    }
   }
 
   func extract(offset: Int64, upToCount count: Int) throws -> Data {
-    guard unzSetOffset64(fileHandle, offset) == UNZ_OK else {
-      throw Archive.Error.failedToExtractArchive
-    }
+    return try _openArchive { handle in
+      guard unzSetOffset64(handle, offset) == UNZ_OK else {
+        throw Archive.Error.failedToExtractArchive
+      }
 
-    let openResult: Int32
-    if let password {
-      openResult = unzOpenCurrentFilePassword(fileHandle, password)
-    } else {
-      openResult = unzOpenCurrentFile(fileHandle)
-    }
-    defer {
-      unzCloseCurrentFile(fileHandle)
-    }
+      let openResult: Int32
+      if let password {
+        openResult = unzOpenCurrentFilePassword(handle, password)
+      } else {
+        openResult = unzOpenCurrentFile(handle)
+      }
+      defer {
+        unzCloseCurrentFile(handle)
+      }
 
-    guard openResult == UNZ_OK else {
-      throw Archive.Error.failedToExtractArchive
+      guard openResult == UNZ_OK else {
+        throw Archive.Error.failedToExtractArchive
+      }
+      return _readData(handle: handle, upToCount: count)
     }
-    return _readData(upToCount: count)
   }
 
   func checkEncrypted() -> Bool {
-    unzGoToFirstFile(fileHandle)
-    repeat {
-      var info = unz_file_info64()
-      unzGetCurrentFileInfo64(fileHandle, &info, nil, 0, nil, 0, nil, 0)
-      if info.uncompressed_size > 0 {
-        return info.flag & 0x01 != 0
-      }
-    } while unzGoToNextFile(fileHandle) == UNZ_OK
-    return false
+    let result = try? _openArchive { handle in
+      unzGoToFirstFile(handle)
+      repeat {
+        var info = unz_file_info64()
+        unzGetCurrentFileInfo64(handle, &info, nil, 0, nil, 0, nil, 0)
+        if info.uncompressed_size > 0 {
+          return info.flag & 0x01 != 0
+        }
+      } while unzGoToNextFile(handle) == UNZ_OK
+      return false
+    }
+    return result ?? false
   }
 
   func validatePassword(_ password: String) -> Bool {
-    unzGoToFirstFile(fileHandle)
-    repeat {
-      var info = unz_file_info64()
-      unzGetCurrentFileInfo64(fileHandle, &info, nil, 0, nil, 0, nil, 0)
-      if info.uncompressed_size > 0 {
-        return unzOpenCurrentFilePassword(fileHandle, password) == UNZ_OK
-      }
-    } while unzGoToNextFile(fileHandle) == UNZ_OK
-    return false
+    let result = try? _openArchive { handle in
+      unzGoToFirstFile(handle)
+      repeat {
+        var info = unz_file_info64()
+        unzGetCurrentFileInfo64(handle, &info, nil, 0, nil, 0, nil, 0)
+        if info.uncompressed_size > 0 {
+          return unzOpenCurrentFilePassword(handle, password) == UNZ_OK
+        }
+      } while unzGoToNextFile(handle) == UNZ_OK
+      return false
+    }
+    return result ?? false
   }
 
-  private func _readData(upToCount count: Int) -> Data {
+  private func _openArchive<Result>(_ handler: (unzFile) throws -> Result) throws -> Result {
+    guard let handle = unzOpen64(fileURL.filePath) else {
+      throw Archive.Error.failedToOpenArchive
+    }
+    defer {
+      unzClose(handle)
+    }
+    return try handler(handle)
+  }
+
+  private func _readData(handle: unzFile, upToCount count: Int) -> Data {
     var data = Data(capacity: count)
     var buffer = Array<UInt8>(repeating: 0, count: min(65535, count))
     var readLength = 0
     while readLength < count {
-      let length = Int(unzReadCurrentFile(fileHandle, &buffer, UInt32(buffer.count)))
+      let length = Int(unzReadCurrentFile(handle, &buffer, UInt32(buffer.count)))
       if length > 0 {
         data.append(Data(bytes: &buffer, count: length))
         readLength += length

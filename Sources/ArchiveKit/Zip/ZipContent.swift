@@ -38,12 +38,12 @@ struct ZipContent: Archive.Content {
   var contentType: Archive.ContentType { isDirectory ? .directory : .file }
   var format: Archive.Format { .zip }
 
-  func data() async throws -> Data {
-    return try await handle.extract(offset: offset, upToCount: Int(uncompressedSize))
+  func data() throws -> Data {
+    return try handle.extract(offset: offset, upToCount: Int(uncompressedSize))
   }
 
-  func data(upToCount count: Int) async throws -> Data {
-    return try await handle.extract(offset: offset, upToCount: min(count, Int(uncompressedSize)))
+  func data(upToCount count: Int) throws -> Data {
+    return try handle.extract(offset: offset, upToCount: min(count, Int(uncompressedSize)))
   }
 
   func write(to url: URL) throws {

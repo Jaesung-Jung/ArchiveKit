@@ -26,10 +26,10 @@ import Foundation
 // MARK: - Archive.Reader
 
 extension Archive {
-  public protocol Reader {
-    func contents() async throws -> [Content]
-    func contents(password: String) async throws -> [Content]
-    func checkEncrypted() async throws -> Bool
-    func validatePassword(_ password: String) async throws -> Bool
+  public protocol Reader: Sendable {
+    func contents() throws -> [Content]
+    func contents(password: String) throws -> [Content]
+    func checkEncrypted() throws -> Bool
+    func validatePassword(_ password: String) throws -> Bool
   }
 }
